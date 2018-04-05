@@ -84,11 +84,19 @@ class Ripper:
         self.cddb = '.cddb'
         with open(os.path.join(self.work, self.cdindex), 'rb') as info_file:
             self.cdinfo = xmltodict.parse(info_file)
-        self.artist = self.cdinfo['CDInfo']['SingleArtistCD']['Artist']
+        if 'SingleArtistCD' in self.cdinfo['CDInfo']:
+            tmp_cdartist = self.cdinfo['CDInfo']['SingleArtistCD']
+            self.artist = tmp_cdartist['Artist']
+        elif 'MultipleArtistCD' in self.cdinfo['CDInfo']:
+            tmp_cdartist = self.cdinfo['CDInfo']['MultipleArtistCD']
+            self.artist = 'Various Artists'
         self.album = self.cdinfo['CDInfo']['Title']
         self.namemap = {}
-        for track in self.cdinfo['CDInfo']['SingleArtistCD']['Track']:
-            track_no = int(track['@Num'])
+        for i, track in enumerate(tmp_cdartist['Track'], 1):
+            try:
+                track_no = int(track['@Num'])
+            except:
+                track_no = i
             track_name = track['Name']
             formatted_track = '{0:02} - {1}'.format(track_no, track_name)
             self.namemap[track_no] = formatted_track
