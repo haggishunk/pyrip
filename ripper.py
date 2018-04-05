@@ -12,7 +12,7 @@ class Ripper:
 
     def __init__(self, dev='/dev/sr0', loc=os.getcwd()):
         self.dev = dev
-        self.loc = os.path.expanduser(os.path.abspath(loc))
+        self.loc = os.path.abspath(os.path.expanduser(loc))
         if not os.path.exists(self.loc):
             try:
                 os.mkdir(self.loc)
@@ -100,7 +100,7 @@ class Ripper:
         self.dest = os.path.join(self.loc, self.artist, self.album)
         if not os.path.exists(self.dest):
             try:
-                os.mkdir(self.dest)
+                os.makedirs(self.dest)
             except Exception as err:
                 print('Could not create final destination: {0}'.format(err.args))
                 exit()
@@ -114,8 +114,9 @@ class Ripper:
             self.trackmap = dict((os.path.splitext(x)[0], TrackNo(x)) for x in os.listdir(self.work) if '.mp3' in x)
         for track, no in self.trackmap.items():
             final_track = self.namemap[no]
-            self.TransferFile(track, '{0}.mp3'.format(final_track))
-            self.TransferFile(track, '{0}.inf'.format(final_track))
+            self.TransferFile('{0}.mp3'.format(track), '{0}.mp3'.format(final_track))
+            self.TransferFile('{0}.wav'.format(track), '{0}.wav'.format(final_track))
+            self.TransferFile('{0}.inf'.format(track), '{0}.inf'.format(final_track))
             print(final_track)
         return
 
@@ -123,7 +124,8 @@ class Ripper:
         if newname is None:
             newname = basename
         try:
-            os.rename(os.path.join(self.work, basename), os.path.join(self.dest, basename))
+            print('Moving {0} to {1}'.format(os.path.join(self.work, basename), os.path.join(self.dest, newname)))
+            os.rename(os.path.join(self.work, basename), os.path.join(self.dest, newname))
         except Exception as err:
             print('No luck transferring file: {0}'.format(err.args))
         return
