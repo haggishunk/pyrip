@@ -12,7 +12,21 @@ class Ripper:
 
     def __init__(self, dev='/dev/sr0', loc=os.getcwd()):
         self.dev = dev
-        self.loc = os.path.abspath(loc)
+        self.loc = os.path.expanduser(os.path.abspath(loc))
+        if not os.path.exists(self.loc):
+            try:
+                os.mkdir(self.loc)
+            except Exception as err:
+                print('Bad destination directory: {0}'.format(err.args))
+                exit()
+
+        self.work = os.path.join(self.loc, 'working')
+        if not os.path.exists(self.work):
+            try:
+                os.mkdir(self.work)
+            except Exception as err:
+                print('Could not create working directory: {0}'.format(err.args))
+                exit()
         return
 
     def ExecuteCmd(self, cmd_args):
@@ -36,6 +50,7 @@ class Ripper:
         return result
 
     def CDRip(self):
+        # rip wavs to working directory
         cdda2wav_args = [
          CDDA2WAV,
          '-O', 'wav',
@@ -45,28 +60,29 @@ class Ripper:
          'cddbp-server=freedb.freedb.org',
          'cddbp-port=8880',
          'dev={0}'.format(self.dev),
-         '{0}/'.format(self.loc)
+         '{0}/'.format(self.work)
         ]
         self.ripped = self.ExecuteCmd(cdda2wav_args)
         return
 
     def ConvertToMP3(self):
         self.converted = {}
-        # get all wav files in target directory
-        files = [os.path.join(self.loc, x) for x in os.listdir(self.loc) if '.wav' in x]
+        # get all wav files in working directory
+        files = [x for x in os.listdir(self.work) if '.wav' in x]
         for wavfile in files:
             mp3file = wavfile.replace('.wav', '.mp3')
             lame_args = [
              LAME,
-             wavfile,
-             mp3file,
+             os.path.join(self.work, wavfile),
+             os.path.join(self.work, mp3file),
             ]
             self.converted[mp3file] = self.ExecuteCmd(lame_args)
         return
 
     def GetInfoCD(self):
-        cdindex = [os.path.join(self.loc, indexfile) for indexfile in os.listdir(self.loc) if '.cdindex' in indexfile][0]
-        with open(cdindex, 'rb') as info_file:
+        self.cdindex = '.cdindex'
+        self.cddb = '.cddb'
+        with open(os.path.join(self.work, self.cdindex), 'rb') as info_file:
             self.cdinfo = xmltodict.parse(info_file)
         self.artist = self.cdinfo['CDInfo']['SingleArtistCD']['Artist']
         self.album = self.cdinfo['CDInfo']['Title']
@@ -74,26 +90,42 @@ class Ripper:
         for track in self.cdinfo['CDInfo']['SingleArtistCD']['Track']:
             track_no = int(track['@Num'])
             track_name = track['Name']
-            formatted_track = '{0:02} - {1}.mp3'.format(track_no, track_name)
-            self.namemap[track_no] = os.path.join(self.loc, formatted_track)
+            formatted_track = '{0:02} - {1}'.format(track_no, track_name)
+            self.namemap[track_no] = formatted_track
+        print('Got info for {0}: {1}'.format(self.artist, self.album))
         return
 
     def NameTracks(self, use_converted_dict=True):
         self.GetInfoCD()
-        print(self.artist, self.album)
+        self.dest = os.path.join(self.loc, self.artist, self.album)
+        if not os.path.exists(self.dest):
+            try:
+                os.mkdir(self.dest)
+            except Exception as err:
+                print('Could not create final destination: {0}'.format(err.args))
+                exit()
+        self.TransferFile(self.cdindex)
+        self.TransferFile(self.cddb)
 
         # gather source track filenames that were successfully converted to MP3
         if use_converted_dict:
-            self.trackmap = dict((os.path.join(self.loc, k), TrackNo(k)) for (k, v) in iter(self.converted.items()) if v is True)
+            self.trackmap = dict((os.path.splitext(k)[0], TrackNo(k)) for (k, v) in iter(self.converted.items()) if v is True)
         else:
-            self.trackmap = dict((os.path.join(self.loc, x), TrackNo(x)) for x in os.listdir(self.loc) if '.mp3' in x)
-
+            self.trackmap = dict((os.path.splitext(x)[0], TrackNo(x)) for x in os.listdir(self.work) if '.mp3' in x)
         for track, no in self.trackmap.items():
-            try:
-                os.rename(track, self.namemap[no])
-                print(os.path.basename(self.namemap[no]))
-            except Exception as err:
-                print('Failed rename: {0}'.format(err))
+            final_track = self.namemap[no]
+            self.TransferFile(track, '{0}.mp3'.format(final_track))
+            self.TransferFile(track, '{0}.inf'.format(final_track))
+            print(final_track)
+        return
+
+    def TransferFile(self, basename, newname=None):
+        if newname is None:
+            newname = basename
+        try:
+            os.rename(os.path.join(self.work, basename), os.path.join(self.dest, basename))
+        except Exception as err:
+            print('No luck transferring file: {0}'.format(err.args))
         return
 
 
