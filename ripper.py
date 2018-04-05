@@ -15,7 +15,7 @@ class Ripper:
         self.loc = os.path.abspath(os.path.expanduser(loc))
         if not os.path.exists(self.loc):
             try:
-                os.mkdir(self.loc)
+                os.makedirs(self.loc)
             except Exception as err:
                 print('Bad destination directory: {0}'.format(err.args))
                 exit()
